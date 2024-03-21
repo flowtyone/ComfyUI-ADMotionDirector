@@ -52,11 +52,11 @@ def create_save_paths(output_dir: str):
         os.makedirs(directory, exist_ok=True)
 
 def do_sanity_check(
-    pixel_values: torch.Tensor,  
+    pixel_values: torch.Tensor,
     output_dir: str = "",
     text_prompt: str = ""
 ):
-    pixel_values, texts = pixel_values.cpu(), text_prompt  
+    pixel_values, texts = pixel_values.cpu(), text_prompt
     pixel_values = rearrange(pixel_values, "b f c h w -> b c f h w")
     for idx, (pixel_value, text) in enumerate(zip(pixel_values, texts)):
         pixel_value = pixel_value[None, ...]
@@ -124,13 +124,13 @@ def create_optimizer_params(model_list, lr):
             for n, p in model.named_parameters():
                 should_negate = 'lora' in n and not is_lora
                 if should_negate: continue
-            
+
                 params = create_optim_params(n, p, lr, extra_params)
                 optimizer_params.append(params)
 
     return optimizer_params
 
-def scale_loras(lora_list: list, scale: float, step=None): 
+def scale_loras(lora_list: list, scale: float, step=None):
     # Assumed enumerator
     if step is not None:
         process_list = range(0, len(lora_list), 1)
@@ -145,7 +145,7 @@ def scale_loras(lora_list: list, scale: float, step=None):
 
 def tensor_to_vae_latent(t, vae):
     video_length = t.shape[1]
-    t = rearrange(t, "b f c h w -> (b f) c h w") 
+    t = rearrange(t, "b f c h w -> (b f) c h w")
     latents = vae.encode(t).latent_dist.sample()
     latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
     latents = latents * 0.18215
@@ -153,23 +153,23 @@ def tensor_to_vae_latent(t, vae):
     return latents
 
 def get_spatial_latents(
-        pixel_values: torch.Tensor, 
-        noisy_latents:torch.Tensor, 
+        pixel_values: torch.Tensor,
+        noisy_latents:torch.Tensor,
         target: torch.Tensor,
     ):
     ran_idx = torch.randint(0, pixel_values.shape[2], (1,)).item()
 
     noisy_latents_input = None
     target_spatial = None
-    
+
     noisy_latents_input = noisy_latents[:, :, ran_idx, :, :]
     target_spatial = target[:, :, ran_idx, :, :]
 
     return noisy_latents_input, target_spatial
 
 def create_ad_temporal_loss(
-        model_pred: torch.Tensor, 
-        loss_temporal: torch.Tensor, 
+        model_pred: torch.Tensor,
+        loss_temporal: torch.Tensor,
         target: torch.Tensor
     ):
 
@@ -196,12 +196,12 @@ class ADMD_InitializeTraining:
             "prompt": ("STRING", {"multiline": True, "default": "",}),
             "max_train_steps": ("INT", {"default": 300, "min": 0, "max": 100000, "step": 1}),
             "learning_rate": ("FLOAT", {"default": 5e-4, "min": 0, "max": 10000, "step": 0.00001}),
-            "learning_rate_spatial": ("FLOAT", {"default": 1e-4, "min": 0, "max": 10000, "step": 0.00001}),    
+            "learning_rate_spatial": ("FLOAT", {"default": 1e-4, "min": 0, "max": 10000, "step": 0.00001}),
             "lora_rank": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 8}),
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-            
+
             "optimization_method": (
-            [   
+            [
                 'Lion',
                 'AdamW',
             ], {
@@ -209,20 +209,20 @@ class ADMD_InitializeTraining:
             }),
             "include_resnet": ("BOOLEAN", {"default": False}),
             },
-            
+
             }
-    
+
     RETURN_TYPES = ("IMAGE", "ADMDPIPELINE", "LORAINFO")
     RETURN_NAMES =("sanitycheck", "admd_pipeline", "lora_info",)
     FUNCTION = "process"
 
     CATEGORY = "AD_MotionDirector"
 
-    def process(self, pipeline, images, prompt,  
-                lora_name, learning_rate, learning_rate_spatial, 
+    def process(self, pipeline, images, prompt,
+                lora_name, learning_rate, learning_rate_spatial,
                 lora_rank, seed, optimization_method, max_train_steps, include_resnet):
         with torch.inference_mode(False):
-                      
+
             validation_pipeline = pipeline["validation_pipeline"]
             train_noise_scheduler = pipeline["train_noise_scheduler"]
             train_noise_scheduler_spatial = pipeline["train_noise_scheduler_spatial"]
@@ -240,7 +240,7 @@ class ADMD_InitializeTraining:
 
             text_prompt = []
             text_prompt.append(prompt)
-  
+
             scale_lr = False
             lr_warmup_steps = 0
             lr_scheduler = "constant"
@@ -250,22 +250,22 @@ class ADMD_InitializeTraining:
             adam_beta2 = 0.999
             adam_weight_decay = 1e-2
             gradient_accumulation_steps = 1
-            
+
             is_debug = False
 
             lora_unet_dropout = 0.1
             if include_resnet:
                 target_spatial_modules = ["Transformer3DModel", "ResnetBlock2D"]
-            else: 
+            else:
                 target_spatial_modules = ["Transformer3DModel"]
 
-            target_temporal_modules = ["TemporalTransformerBlock"]          
-  
+            target_temporal_modules = ["TemporalTransformerBlock"]
+
             name = lora_name
             date_calendar = datetime.datetime.now().strftime("%Y-%m-%d")
             date_time = datetime.datetime.now().strftime("%H-%M-%S")
             folder_name = "debug" if is_debug else name + date_time
-            
+
             output_dir = os.path.join(script_directory, "outputs", date_calendar, folder_name)
 
             if is_debug and os.path.exists(output_dir):
@@ -279,10 +279,10 @@ class ADMD_InitializeTraining:
             )
 
             # set paths
-            spatial_lora_path = os.path.join(folder_paths.models_dir,"loras", "trained_spatial", date_calendar, date_time, lora_name) 
-            temporal_lora_path = os.path.join(folder_paths.models_dir,"animatediff_motion_lora", date_calendar, date_time, lora_name)
+            spatial_lora_path = os.path.join(folder_paths.output_directory,"loras", "trained_spatial", date_calendar, date_time, lora_name)
+            temporal_lora_path = os.path.join(folder_paths.output_directory,"animatediff_motion_lora", date_calendar, date_time, lora_name)
             temporal_lora_base_path = os.path.join(date_calendar, date_time, lora_name)
-            
+
             lora_info = {
                 "lora_name": lora_name,
                 "lora_rank": lora_rank,
@@ -291,8 +291,8 @@ class ADMD_InitializeTraining:
                 "temporal_lora_base_path": temporal_lora_base_path
             }
 
-            if optimization_method == "AdamW":   
-                print("Using AdamW optimizer for training") 
+            if optimization_method == "AdamW":
+                print("Using AdamW optimizer for training")
                 optimizer = torch.optim.AdamW
             else:
                 print("Using Lion optimizer for training")
@@ -304,10 +304,10 @@ class ADMD_InitializeTraining:
                 learning_rate = (learning_rate * gradient_accumulation_steps * train_batch_size)
 
             # Temporal LoRA
-            
+
             # one temporal lora
             lora_manager_temporal = LoraHandler(use_unet_lora=True, unet_replace_modules=target_temporal_modules)
-            
+
             unet_lora_params_temporal, unet_negation_temporal = lora_manager_temporal.add_lora_to_model(
                 True, unet, lora_manager_temporal.unet_replace_modules, 0,
                 temporal_lora_path, r=lora_rank)
@@ -320,7 +320,7 @@ class ADMD_InitializeTraining:
                 betas=(adam_beta1, adam_beta2),
                 weight_decay=adam_weight_decay
             )
-        
+
             lr_scheduler_temporal = get_scheduler(
                 lr_scheduler,
                 optimizer=optimizer_temporal,
@@ -360,7 +360,7 @@ class ADMD_InitializeTraining:
                 num_training_steps=max_train_steps * gradient_accumulation_steps,
             )
             lr_scheduler_spatial_list.append(lr_scheduler_spatial)
-           
+
             # Support mixed-precision training
             if 'scaler' not in globals():
                 scaler = torch.cuda.amp.GradScaler()
@@ -388,13 +388,13 @@ class ADMD_InitializeTraining:
             "include_resnet": include_resnet
         }
         #Data batch sanity check
-        
+
         sanitycheck = do_sanity_check(
-            pixel_values,  
-            output_dir=output_dir, 
+            pixel_values,
+            output_dir=output_dir,
             text_prompt=text_prompt
         )
- 
+
         sanitycheck = sanitycheck.view(*sanitycheck.shape[1:])
         sanitycheck = sanitycheck.permute(1, 2, 3, 0).cpu()
         sanitycheck = (sanitycheck + 1.0) / 2.0
@@ -415,10 +415,10 @@ class ADMD_DiffusersLoader:
 
         return {"required":
                 {
-                "additional_models": ("ADDITIONAL_MODELS", ),  
+                "additional_models": ("ADDITIONAL_MODELS", ),
                 "download_default": ("BOOLEAN", {"default": False},),
                 "scheduler": (
-            [   
+            [
                 'DDIMScheduler',
                 'DDPMScheduler',
             ], {
@@ -429,7 +429,7 @@ class ADMD_DiffusersLoader:
                 "optional": {
                  "model": (paths,),
                 }
-                
+
             }
     RETURN_TYPES = ("PIPELINE",)
 
@@ -440,35 +440,35 @@ class ADMD_DiffusersLoader:
     def load_checkpoint(self, download_default, scheduler, use_xformers, additional_models, model=""):
         with torch.inference_mode(False):
             device = comfy.model_management.get_torch_device()
-            target_path = os.path.join(folder_paths.models_dir,'diffusers', "stable-diffusion-v1-5")      
+            target_path = os.path.join(folder_paths.models_dir,'diffusers', "stable-diffusion-v1-5")
             if download_default and model != os.path.exists(target_path):
                 from huggingface_hub import snapshot_download
                 download_to = os.path.join(folder_paths.models_dir,'diffusers')
-                snapshot_download(repo_id="runwayml/stable-diffusion-v1-5", ignore_patterns=["*.safetensors","*.ckpt", "*.pt", "*.png", "*non_ema*", "*safety_checker*", "*fp16*"], 
-                                    local_dir=f"{download_to}/stable-diffusion-v1-5", local_dir_use_symlinks=False)   
+                snapshot_download(repo_id="runwayml/stable-diffusion-v1-5", ignore_patterns=["*.safetensors","*.ckpt", "*.pt", "*.png", "*non_ema*", "*safety_checker*", "*fp16*"],
+                                    local_dir=f"{download_to}/stable-diffusion-v1-5", local_dir_use_symlinks=False)
                 model_path = "stable-diffusion-v1-5"
             else:
                 model_path = model
-            
+
             for search_path in folder_paths.get_folder_paths("diffusers"):
                 if os.path.exists(search_path):
                     path = os.path.join(search_path, model_path)
                     if os.path.exists(path):
                         model_path = path
-                        break      
-            
+                        break
+
             config = OmegaConf.load(os.path.join(script_directory, f"configs/training/motion_director/training.yaml"))
-       
+
             vae          = AutoencoderKL.from_pretrained(model_path, subfolder="vae")
             tokenizer    = CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer")
             text_encoder = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder")
-         
+
             unet_additional_kwargs = config.unet_additional_kwargs
             unet = UNet3DConditionModel.from_pretrained_2d(
-                model_path, subfolder="unet", 
+                model_path, subfolder="unet",
                 unet_additional_kwargs=unet_additional_kwargs
             )
-            
+
             # Load scheduler, tokenizer and models.
             noise_scheduler_kwargs = {
                 'num_train_timesteps': 1000,
@@ -493,7 +493,7 @@ class ADMD_DiffusersLoader:
             # Reset the beta_schedule for the linear noise scheduler and create it
             noise_scheduler_kwargs['beta_schedule'] = 'linear'
             train_noise_scheduler = SchedulerClass(**noise_scheduler_kwargs)
-            
+
             # Freeze all models for LoRA training
             unet.requires_grad_(False)
             vae.requires_grad_(False)
@@ -514,16 +514,16 @@ class ADMD_DiffusersLoader:
                 unet=unet, vae=vae, tokenizer=tokenizer, text_encoder=text_encoder, scheduler=noise_scheduler,
             ).to(device)
 
-            motion_module_path, domain_adapter_path = additional_models 
+            motion_module_path, domain_adapter_path = additional_models
 
             validation_pipeline = load_weights(
-                validation_pipeline, 
+                validation_pipeline,
                 motion_module_path=motion_module_path,
-                adapter_lora_path=domain_adapter_path, 
+                adapter_lora_path=domain_adapter_path,
                 dreambooth_model_path=""
             )
 
-            validation_pipeline.enable_vae_slicing()         
+            validation_pipeline.enable_vae_slicing()
 
             pipeline = {
                 'validation_pipeline': validation_pipeline,
@@ -547,16 +547,16 @@ class ADMD_CheckpointLoader:
         return {"required":
                 {
                 "additional_models": ("ADDITIONAL_MODELS", ),
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),  
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
                 "scheduler": (
-            [   
+            [
                 'DDIMScheduler',
                 'DDPMScheduler',
             ], {
                "default": 'DDIMScheduler'
             }),
             "use_xformers": ("BOOLEAN", {"default": False}),
-                },                
+                },
             }
     RETURN_TYPES = ("PIPELINE",)
 
@@ -565,7 +565,7 @@ class ADMD_CheckpointLoader:
     CATEGORY = "AD_MotionDirector"
 
     def load_checkpoint(self, scheduler, use_xformers, additional_models, ckpt_name):
-        with torch.inference_mode(False):            
+        with torch.inference_mode(False):
             model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
             original_config = OmegaConf.load(os.path.join(script_directory, f"configs/v1-inference.yaml"))
             ad_unet_config = OmegaConf.load(os.path.join(script_directory, f"configs/ad_unet_config.yaml"))
@@ -643,16 +643,16 @@ class ADMD_CheckpointLoader:
             # Enable gradient checkpointing
             unet.enable_gradient_checkpointing()
 
-            motion_module_path, domain_adapter_path = additional_models 
+            motion_module_path, domain_adapter_path = additional_models
 
             validation_pipeline = load_weights(
-                validation_pipeline, 
+                validation_pipeline,
                 motion_module_path=motion_module_path,
-                adapter_lora_path=domain_adapter_path, 
+                adapter_lora_path=domain_adapter_path,
                 dreambooth_model_path=""
             )
 
-            validation_pipeline.enable_vae_slicing()         
+            validation_pipeline.enable_vae_slicing()
 
             pipeline = {
                 'validation_pipeline': validation_pipeline,
@@ -670,12 +670,12 @@ class ADMD_AdditionalModelSelect:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": { 
+            "required": {
                 "motion_module": (folder_paths.get_filename_list("animatediff_models"),),
-                "use_adapter_lora": ("BOOLEAN", {"default": True}),                                       
+                "use_adapter_lora": ("BOOLEAN", {"default": True}),
             },
             "optional": {
-                "optional_adapter_lora": (folder_paths.get_filename_list("loras"),),       
+                "optional_adapter_lora": (folder_paths.get_filename_list("loras"),),
             }
         }
     RETURN_TYPES = ("ADDITIONAL_MODELS",)
@@ -694,10 +694,10 @@ class ADMD_AdditionalModelSelect:
             if not Path(adapter_lora_path).is_file():
                 raise ValueError(f"Adapter LoRA path {adapter_lora_path} does not exist")
         else:
-            adapter_lora_path = ""        
+            adapter_lora_path = ""
 
         additional_models.append(motion_module_path)
-        additional_models.append(adapter_lora_path)  
+        additional_models.append(adapter_lora_path)
         return (additional_models,)
 
 class ADMD_ValidationSettings:
@@ -708,10 +708,10 @@ class ADMD_ValidationSettings:
         "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
         "inference_steps": ("INT", {"default": 25, "min": 0, "max": 256, "step": 1}),
         "guidance_scale": ("FLOAT", {"default": 8, "min": 0, "max": 32, "step": 0.1}),
-        "spatial_scale": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),                                        
+        "spatial_scale": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
         "validation_prompt": ("STRING", {"multiline": True, "default": "",}),
         },
-          
+
         }
     RETURN_TYPES = ("VALIDATION_SETTINGS",)
     RETURN_NAMES = ("validation_settings",)
@@ -722,7 +722,7 @@ class ADMD_ValidationSettings:
     def create_validation_settings(self, inference_steps, guidance_scale, spatial_scale, seed, validation_prompt):
         # Create a dictionary with the local variables
         local_vars = locals()
-        
+
         # Filter the dictionary to include only the variables you want
         validation_settings = {
             "inference_steps": local_vars["inference_steps"],
@@ -731,7 +731,7 @@ class ADMD_ValidationSettings:
             "seed": local_vars["seed"],
             "validation_prompt": local_vars["validation_prompt"]
         }
-       
+
         return validation_settings,
 
 class ADMD_LoadLora:
@@ -746,18 +746,18 @@ class ADMD_LoadLora:
                 "prev_motion_lora": ("MOTION_LORA",),
             }
         }
-    
+
     RETURN_TYPES = ("MOTION_LORA",)
     CATEGORY = "AD_MotionDirector"
     FUNCTION = "load_motion_lora"
 
     def load_motion_lora(self, lora_path: str, strength: float, prev_motion_lora: MotionLoraList=None):
-        
+
         if prev_motion_lora is None:
             prev_motion_lora = MotionLoraList()
         else:
             prev_motion_lora = prev_motion_lora.clone()
-        full_lora_path = os.path.join(folder_paths.models_dir,"animatediff_motion_lora",lora_path)
+        full_lora_path = os.path.join(folder_paths.output_directory,"animatediff_motion_lora",lora_path)
         # check if motion lora with name exists
         if not Path(full_lora_path).is_file():
             raise FileNotFoundError(f"Motion lora not found at {full_lora_path}")
@@ -777,7 +777,7 @@ class ADMD_SaveLora:
                 "lora_info": ("LORAINFO", ),
             },
         }
-    
+
     RETURN_TYPES = ("STRING", "ADMDPIPELINE",)
     RETURN_NAMES = ("lora_path", "admd_pipeline",)
     CATEGORY = "AD_MotionDirector"
@@ -790,7 +790,7 @@ class ADMD_SaveLora:
 
             import copy
             validation_pipeline.to('cpu')  # We do this to prevent VRAM spiking / increase from the new copy
-            
+
             spatial_lora_path = lora_info['spatial_lora_path']
             temporal_lora_path = lora_info['temporal_lora_path']
             lora_name = lora_info['lora_name']
@@ -799,8 +799,8 @@ class ADMD_SaveLora:
 
             lora_manager_spatial = LoraHandler(use_unet_lora=True, unet_replace_modules=["Transformer3DModel"])
             lora_manager_spatial.save_lora_weights(
-                model=copy.deepcopy(validation_pipeline), 
-                save_path=spatial_lora_path, 
+                model=copy.deepcopy(validation_pipeline),
+                save_path=spatial_lora_path,
                 step=global_step,
                 use_safetensors=True,
                 lora_rank=lora_rank,
@@ -809,8 +809,8 @@ class ADMD_SaveLora:
             lora_manager_temporal = LoraHandler(use_unet_lora=True, unet_replace_modules=["TemporalTransformerBlock"])
             if lora_manager_temporal is not None:
                 lora_manager_temporal.save_lora_weights(
-                    model=copy.deepcopy(validation_pipeline), 
-                    save_path=temporal_lora_path, 
+                    model=copy.deepcopy(validation_pipeline),
+                    save_path=temporal_lora_path,
                     step=global_step,
                     use_safetensors=True,
                     lora_rank=lora_rank,
@@ -819,7 +819,15 @@ class ADMD_SaveLora:
                 )
 
             final_temporal_lora_name = os.path.join(temporal_lora_base_path, (str(global_step) + "_" + lora_name + "_r"+ str(lora_rank) + "_temporal_unet.safetensors"))
-       
+
+            from s3 import save_outputs
+            from server import PromptServer
+            uploaded = save_outputs([
+                os.path.join(folder_paths.output_directory, "animatediff_motion_lora", final_temporal_lora_name),
+            ], None, True)
+
+            PromptServer.instance.send_sync("output", { "trained_model": uploaded })
+
             return (final_temporal_lora_name, admd_pipeline)
 
 class ADMD_TrainLora:
@@ -827,7 +835,7 @@ class ADMD_TrainLora:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": { 
+            "required": {
                 "admd_pipeline": ("ADMDPIPELINE", ),
                 "steps": ("INT", {"default": 100, "min": 0, "max": 10000, "step": 1}),
             },
@@ -836,7 +844,7 @@ class ADMD_TrainLora:
                 "opt_images_override": ("IMAGE", ),
             }
         }
-    
+
     RETURN_TYPES = ("ADMDPIPELINE",)
     RETURN_NAMES = ("admd_pipeline",)
     CATEGORY = "AD_MotionDirector"
@@ -846,10 +854,10 @@ class ADMD_TrainLora:
         with torch.inference_mode(False):
             train_noise_scheduler = admd_pipeline["train_noise_scheduler"]
             train_noise_scheduler_spatial = admd_pipeline["train_noise_scheduler_spatial"]
-            
+
             text_encoder = admd_pipeline["text_encoder"]
             tokenizer = admd_pipeline["tokenizer"]
-            
+
             optimizer_temporal = admd_pipeline["optimizer_temporal"]
             optimizer_spatial_list = admd_pipeline["optimizer_spatial_list"]
             lr_scheduler_spatial_list = admd_pipeline["lr_scheduler_spatial_list"]
@@ -875,7 +883,7 @@ class ADMD_TrainLora:
 
             if include_resnet:
                 target_spatial_modules = ["Transformer3DModel", "ResnetBlock2D"]
-            else: 
+            else:
                 target_spatial_modules = ["Transformer3DModel"]
 
             target_temporal_modules = ["TemporalTransformerBlock"]
@@ -886,7 +894,7 @@ class ADMD_TrainLora:
             global_step = admd_pipeline["global_step"]
             print(f"global_step: {global_step}")
             max_train_steps = steps
-            
+
             num_update_steps_per_epoch = math.ceil(batch_size) / gradient_accumulation_steps
             num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
@@ -894,14 +902,14 @@ class ADMD_TrainLora:
             progress_bar = tqdm(range(global_step, max_train_steps))
             progress_bar.set_description("Steps")
             pbar = comfy.utils.ProgressBar(batch_size * num_train_epochs)
-            
+
             # Get the text embedding for conditioning
             with torch.no_grad():
                 prompt_ids = tokenizer(
-                    text_prompt, 
-                    max_length=tokenizer.model_max_length, 
-                    padding="max_length", 
-                    truncation=True, 
+                    text_prompt,
+                    max_length=tokenizer.model_max_length,
+                    padding="max_length",
+                    truncation=True,
                     return_tensors="pt"
                 ).input_ids.to(device)
 
@@ -919,7 +927,7 @@ class ADMD_TrainLora:
                 vae.to('cpu')
 
             ### <<<< Training <<<< ###
-            for epoch in range(first_epoch, num_train_epochs):                
+            for epoch in range(first_epoch, num_train_epochs):
                 for step in range(batch_size):
                     spatial_scheduler_lr = 0.0
                     temporal_scheduler_lr = 0.0
@@ -930,7 +938,7 @@ class ADMD_TrainLora:
 
                     if optimizer_temporal is not None:
                         optimizer_temporal.zero_grad(set_to_none=True)
-        
+
                     mask_spatial_lora = random.uniform(0, 1) < 0.2
                     #mask_spatial_lora = 0
 
@@ -940,7 +948,7 @@ class ADMD_TrainLora:
 
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
-                                      
+
                     noise = sample_noise(latents, 0, use_offset_noise=use_offset_noise)
                     comfy.model_management.soft_empty_cache()
                     target = noise
@@ -957,11 +965,11 @@ class ADMD_TrainLora:
                             loras = extract_lora_child_module(unet, target_replace_module=target_temporal_modules)
                             if len(loras) > 0:
                                 scale_loras(loras, 0.)
-                            
+
                             ### >>>> Spatial LoRA Prediction >>>> ###
                             noisy_latents = train_noise_scheduler_spatial.add_noise(latents, noise, timesteps)
                             noisy_latents_input, target_spatial = get_spatial_latents(
-                                pixel_values,  
+                                pixel_values,
                                 noisy_latents,
                                 target,
                             )
@@ -969,39 +977,39 @@ class ADMD_TrainLora:
                                                     encoder_hidden_states=encoder_hidden_states).sample
                             loss_spatial = F.mse_loss(model_pred_spatial[:, :, 0, :, :].float(),
                                                     target_spatial.float(), reduction="mean")
-                            
+
                         loras = extract_lora_child_module(unet, target_replace_module=target_temporal_modules)
                         scale_loras(loras, 1.0)
-                        
+
                         ### >>>> Temporal LoRA Prediction >>>> ###
                         noisy_latents = train_noise_scheduler.add_noise(latents, noise, timesteps)
                         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
-                        
+
                         loss_temporal = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                         loss_temporal = create_ad_temporal_loss(model_pred, loss_temporal, target)
-                            
+
                         # Backpropagate
                         if not mask_spatial_lora:
                             scaler.scale(loss_spatial).backward(retain_graph=True)
                             scaler.step(optimizer_spatial_list[0])
-                                            
+
                         scaler.scale(loss_temporal).backward()
                         scaler.step(optimizer_temporal)
-            
+
                         lr_scheduler_spatial_list[step].step()
                         spatial_scheduler_lr = lr_scheduler_spatial_list[0].get_lr()[0]
-                            
+
                         if lr_scheduler_temporal is not None:
                             lr_scheduler_temporal.step()
                             temporal_scheduler_lr = lr_scheduler_temporal.get_lr()[0]
-                
+
                     scaler.update()
                     progress_bar.update(1)
                     pbar.update(1)
                     global_step += 1
                     logs = {
                         "Temporal Loss": loss_temporal.detach().item(),
-                        "Temporal LR": temporal_scheduler_lr, 
+                        "Temporal LR": temporal_scheduler_lr,
                         "Spatial Loss": loss_spatial.detach().item() if loss_spatial is not None else 0,
                         "Spatial LR": spatial_scheduler_lr
                     }
@@ -1029,22 +1037,22 @@ class ADMD_ValidationSampler:
                 "admd_pipeline": ("ADMDPIPELINE", ),
             },
         }
-    
+
     RETURN_TYPES = ("ADMDPIPELINE", "IMAGE",)
     RETURN_NAMES = ("admd_pipeline", "images",)
     CATEGORY = "AD_MotionDirector"
     FUNCTION = "train"
 
     def train(self, admd_pipeline, validation_settings):
-        with torch.inference_mode(False):       
+        with torch.inference_mode(False):
             unet = admd_pipeline["unet"]
             text_encoder = admd_pipeline["text_encoder"]
-            vae = admd_pipeline["vae"]           
+            vae = admd_pipeline["vae"]
             text_prompt = admd_pipeline["text_prompt"]
             pixel_values = admd_pipeline["pixel_values"]
-            
+
             validation_pipeline = admd_pipeline['validation_pipeline']
-          
+
             device = comfy.model_management.get_torch_device()
 
             video_length, input_height, input_width = pixel_values.shape[1], pixel_values.shape[3], pixel_values.shape[4]
@@ -1052,33 +1060,33 @@ class ADMD_ValidationSampler:
             unet.to(device)
             vae.to(device)
             text_encoder.to(device)
-            
+
             validation_inference_steps = validation_settings["inference_steps"]
             validation_guidance_scale = validation_settings["guidance_scale"]
             validation_spatial_scale = validation_settings["spatial_scale"]
             validation_seed = validation_settings["seed"]
             validation_prompt = validation_settings["validation_prompt"]
-                      
+
             with torch.inference_mode(True):
                 samples = []
                 generator = torch.Generator(device=device)
                 generator.manual_seed(validation_seed)
-                
+
                 with torch.cuda.amp.autocast(enabled=True):
                     unet.disable_gradient_checkpointing()
                     unet.eval()
                     loras = extract_lora_child_module(
-                        unet, 
+                        unet,
                         target_replace_module=["Transformer3DModel"]
                     )
                     scale_loras(loras, validation_spatial_scale)
-                    
+
                     with torch.inference_mode(True):
                         if len(validation_prompt) == 0:
                             prompt = text_prompt
-                        else: 
+                        else:
                             prompt = validation_prompt
-                        
+
                         sample = validation_pipeline(
                             prompt,
                             generator    = generator,
@@ -1092,7 +1100,7 @@ class ADMD_ValidationSampler:
                 # Reshape the sample tensor for returning
                 samples = torch.concat(samples)
                 samples = samples.view(*samples.shape[1:])
-                samples = samples.permute(1, 2, 3, 0).cpu() 
+                samples = samples.permute(1, 2, 3, 0).cpu()
                 return (admd_pipeline, samples,)
 
 NODE_CLASS_MAPPINGS = {
